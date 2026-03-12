@@ -709,5 +709,6 @@ function redraw()
 end
 
 function cleanup()
+  clock.cancel_all()
   if metro_redraw then metro_redraw:stop() end
 end
