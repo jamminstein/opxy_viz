@@ -9,8 +9,8 @@
 -- Bass: drunk-walk octave sequence, varying octaves only
 -- Uses PolyPerc engine
 
-engine.name = "PolyPerc"
-local musicutil = require "musicutil"
+engine.name = \"PolyPerc\"
+local musicutil = require \"musicutil\"
 
 -- ======================
 -- Global state
@@ -42,6 +42,16 @@ local amp_smooth = 0.0
 -- MIDI burst state
 local midi_burst_active = false
 local midi_burst_intensity = 0.0
+
+-- beat phase tracking (0..1 continuous phase within bar)
+local beat_phase = 0.0
+
+-- encoder popup state
+local enc_popup_active = false
+local enc_popup_time = 0.0
+local enc_popup_param = \"\"
+local enc_popup_value = \"\"
+local enc_popup_duration = 0.8
 
 -- ======================
 -- Utilities
@@ -100,7 +110,7 @@ end
 -- ======================
 local function poll_audio_level()
   if audio_reactive then
-    poll.set("amp_in_l")
+    poll.set(\"amp_in_l\")
   end
 end
 
@@ -110,7 +120,7 @@ end
 
 -- 1) RADIAL BURST
 anims[1] = {
-  name = "RADIAL",
+  name = \"RADIAL\",
   draw = function(time, m)
     local cx, cy = 64, 32
     local spokes = math.floor(lerp(6, 30, m) + 0.5)
@@ -155,7 +165,7 @@ anims[1] = {
 
 -- 2) SCANLINE
 anims[2] = {
-  name = "SCAN",
+  name = \"SCAN\",
   draw = function(time, m)
     local w, h = 128, 64
     local rate = (0.35 + 1.9 * speed)
@@ -199,7 +209,7 @@ anims[2] = {
 
 -- 3) TARGET
 anims[3] = {
-  name = "TARGET",
+  name = \"TARGET\",
   draw = function(time, m)
     local cx, cy = 64, 32
     local rings = math.floor(lerp(3, 9, m) + 0.5)
@@ -238,7 +248,7 @@ anims[3] = {
 
 -- 4) SPIRAL
 anims[4] = {
-  name = "SPIRAL",
+  name = \"SPIRAL\",
   draw = function(time, m)
     local cx, cy = 64, 32
     local turns = lerp(1.0, 4.5, m)
@@ -270,7 +280,7 @@ anims[4] = {
 
 -- 5) ORBITS
 anims[5] = {
-  name = "ORBITS",
+  name = \"ORBITS\",
   draw = function(time, m)
     local cx, cy = 64, 32
     local n = math.floor(lerp(6, 18, m) + 0.5)
@@ -299,7 +309,7 @@ anims[5] = {
 
 -- 6) SHUTTER
 anims[6] = {
-  name = "SHUTTER",
+  name = \"SHUTTER\",
   draw = function(time, m)
     local w, h = 128, 64
     local p = (time * (0.5 + 1.8 * speed)) % 1.0
@@ -326,14 +336,14 @@ anims[6] = {
 
 -- 7) MOSAIC
 anims[7] = {
-  name = "MOSAIC",
+  name = \"MOSAIC\",
   draw = function(time, m)
     local w, h = 128, 64
     local zoom = lerp(1.0, 3.2, m)
     -- performance guard: min block size of 4 to avoid frame drops
     local block = math.max(math.floor(lerp(8, 2, m) + 0.5), 4)
     local freq = (0.35 + 1.7 * speed)
-    -- note pulse shifts the wave phase for a visual "kick"
+    -- note pulse shifts the wave phase for a visual \"kick\"
     local pulse_offset = note_pulse * 2.0
     -- audio-reactive frequency modulation
     local audio_freq_mod = amp_level * 3.0
@@ -359,7 +369,7 @@ anims[7] = {
 
 -- 8) WAVES
 anims[8] = {
-  name = "WAVES",
+  name = \"WAVES\",
   draw = function(time, m)
     local h = 64
     local bands = math.floor(lerp(6, 20, m) + 0.5)
@@ -387,7 +397,7 @@ anims[8] = {
 
 -- 9) ESCHER MAZE (Truchet tiling) + pulse
 anims[9] = {
-  name = "ESCHER",
+  name = \"ESCHER\",
   draw = function(time, m)
     local w, h = 128, 64
     local cell = math.floor(lerp(16, 8, m) + 0.5)
@@ -434,7 +444,7 @@ anims[9] = {
 
 -- 10) INFINITE STAIR MAZE (isometric loop vibe)
 anims[10] = {
-  name = "STAIRS",
+  name = \"STAIRS\",
   draw = function(time, m)
     local cx, cy = 64, 22
     local cell = math.floor(lerp(10, 6, m) + 0.5)
@@ -494,7 +504,7 @@ anims[10] = {
 
 -- 11) RECURSIVE CORRIDOR (Droste-ish)
 anims[11] = {
-  name = "CORRIDOR",
+  name = \"CORRIDOR\",
   draw = function(time, m)
     local w, h = 128, 64
     local depth = math.floor(lerp(6, 14, m) + 0.5)
@@ -531,9 +541,9 @@ anims[11] = {
 -- Sound: sequences (drunk walk)
 -- ======================
 local function generate_seq(anim_idx)
-  local steps = params:get("steps")
-  local lo = params:get("oct_lo")
-  local hi = params:get("oct_hi")
+  local steps = params:get(\"steps\")
+  local lo = params:get(\"oct_lo\")
+  local hi = params:get(\"oct_hi\")
   local s = {}
   -- start near center of range
   local oct = clamp(0, lo, hi)
@@ -580,7 +590,7 @@ end
 local function sync_division()
   -- convert division param to clock.sync value
   -- 1 = 1/4 note, 2 = 1/8 note, 3 = 1/16 note
-  local div = params:get("division")
+  local div = params:get(\"division\")
   if div == 1 then return 1
   elseif div == 2 then return 1/2
   else return 1/4
@@ -588,14 +598,14 @@ local function sync_division()
 end
 
 local function play_step()
-  local base_note = params:get("base_note")
+  local base_note = params:get(\"base_note\")
   local s = seqs[current_anim]
   if not s or #s == 0 then return end
   local oct = s[step_i] or 0
   local note = base_note + 12 * oct
-  engine.amp(params:get("amp"))
-  engine.release(params:get("rel"))
-  engine.cutoff(params:get("cutoff"))
+  engine.amp(params:get(\"amp\"))
+  engine.release(params:get(\"rel\"))
+  engine.cutoff(params:get(\"cutoff\"))
   engine.hz(musicutil.note_num_to_freq(note))
   -- fire visual pulse
   note_pulse = 1.0
@@ -643,34 +653,34 @@ function init()
   math.randomseed(os.time())
 
   -- params
-  params:add_separator("opxy_viz", "OPXY VIZ")
+  params:add_separator(\"opxy_viz\", \"OPXY VIZ\")
 
-  params:add_option("fps", "FPS", { "30", "60" }, 1)
-  params:set_action("fps", function(v)
+  params:add_option(\"fps\", \"FPS\", { \"30\", \"60\" }, 1)
+  params:set_action(\"fps\", function(v)
     fps = (v == 2) and 60 or 30
     metro_redraw.time = 1 / fps
   end)
 
-  params:add_control("morph", "MORPH (enc2)", controlspec.new(0.0, 1.0, "lin", 0.001, morph))
-  params:set_action("morph", function(v) morph = v end)
+  params:add_control(\"morph\", \"MORPH (enc2)\", controlspec.new(0.0, 1.0, \"lin\", 0.001, morph))
+  params:set_action(\"morph\", function(v) morph = v end)
 
-  params:add_control("speed", "SPEED (enc3)", controlspec.new(0.2, 2.0, "lin", 0.01, speed, "x"))
-  params:set_action("speed", function(v) speed = v end)
+  params:add_control(\"speed\", \"SPEED (enc3)\", controlspec.new(0.2, 2.0, \"lin\", 0.01, speed, \"x\"))
+  params:set_action(\"speed\", function(v) speed = v end)
 
-  params:add_separator("sound", "SOUND")
-  params:add_control("bpm", "BPM", controlspec.new(40, 180, "lin", 1, 90, "bpm"))
-  params:add_option("division", "STEP DIV", { "1/4", "1/8", "1/16" }, 3)
-  params:add_number("steps", "STEPS", 4, 32, 16)
-  params:add_number("base_note", "BASE MIDI", 24, 60, 36)
-  params:add_number("oct_lo", "OCT LOW", -3, 0, -1)
-  params:add_number("oct_hi", "OCT HIGH", 0, 3, 1)
-  params:add_control("amp", "AMP", controlspec.new(0.0, 1.0, "lin", 0.01, 0.35))
-  params:add_control("rel", "RELEASE", controlspec.new(0.05, 3.0, "lin", 0.01, 0.6, "s"))
-  params:add_control("cutoff", "CUTOFF", controlspec.new(80, 4000, "exp", 1, 700, "hz"))
+  params:add_separator(\"sound\", \"SOUND\")
+  params:add_control(\"bpm\", \"BPM\", controlspec.new(40, 180, \"lin\", 1, 90, \"bpm\"))
+  params:add_option(\"division\", \"STEP DIV\", { \"1/4\", \"1/8\", \"1/16\" }, 3)
+  params:add_number(\"steps\", \"STEPS\", 4, 32, 16)
+  params:add_number(\"base_note\", \"BASE MIDI\", 24, 60, 36)
+  params:add_number(\"oct_lo\", \"OCT LOW\", -3, 0, -1)
+  params:add_number(\"oct_hi\", \"OCT HIGH\", 0, 3, 1)
+  params:add_control(\"amp\", \"AMP\", controlspec.new(0.0, 1.0, \"lin\", 0.01, 0.35))
+  params:add_control(\"rel\", \"RELEASE\", controlspec.new(0.05, 3.0, \"lin\", 0.01, 0.6, \"s\"))
+  params:add_control(\"cutoff\", \"CUTOFF\", controlspec.new(80, 4000, \"exp\", 1, 700, \"hz\"))
 
-  params:add_separator("audio_reactive", "AUDIO REACTIVE")
-  params:add_option("audio_reactive", "AUDIO REACTIVE", { "off", "on" }, 1)
-  params:set_action("audio_reactive", function(v) audio_reactive = (v == 2) end)
+  params:add_separator(\"audio_reactive\", \"AUDIO REACTIVE\")
+  params:add_option(\"audio_reactive\", \"AUDIO REACTIVE\", { \"off\", \"on\" }, 1)
+  params:set_action(\"audio_reactive\", function(v) audio_reactive = (v == 2) end)
 
   params:bang()
   ensure_seqs()
@@ -687,11 +697,20 @@ function init()
     local dt = now - last_time
     last_time = now
     t = t + dt
+    -- update beat phase (0..1 within 4-beat bar)
+    beat_phase = (beat_phase + dt / (60 / params:get(\"bpm\") * 4)) % 1.0
     -- decay note pulse each frame
     note_pulse = note_pulse * note_pulse_decay
     if note_pulse < 0.01 then note_pulse = 0 end
     -- smooth audio level (low-pass filter)
     amp_smooth = amp_smooth * 0.85 + amp_level * 0.15
+    -- decay encoder popup
+    if enc_popup_active then
+      enc_popup_time = enc_popup_time + dt
+      if enc_popup_time >= enc_popup_duration then
+        enc_popup_active = false
+      end
+    end
     redraw()
   end
   metro_redraw:start()
@@ -713,10 +732,20 @@ function enc(n, d)
     set_current_anim(math.floor(sel))
   elseif n == 2 then
     morph = clamp(morph + d / 80, 0.0, 1.0)
-    params:set("morph", morph)
+    params:set(\"morph\", morph)
+    -- trigger popup
+    enc_popup_active = true
+    enc_popup_time = 0.0
+    enc_popup_param = \"morph\"
+    enc_popup_value = string.format(\"%.2f\", morph)
   elseif n == 3 then
     speed = clamp(speed + d / 80, 0.2, 2.0)
-    params:set("speed", speed)
+    params:set(\"speed\", speed)
+    -- trigger popup
+    enc_popup_active = true
+    enc_popup_time = 0.0
+    enc_popup_param = \"speed\"
+    enc_popup_value = string.format(\"%.2f\", speed)
   end
 end
 
@@ -754,11 +783,66 @@ function redraw()
   draw_grain(t, morph)
   anims[show_idx].draw(t, morph)
 
+  -- =====================
+  -- STATUS STRIP (y 0-8)
+  -- =====================
+  -- left: \"VIZ\" label at level 4
+  screen.level(4)
+  screen.move(2, 6)
+  screen.text(\"VIZ\")
+
+  -- center: animation name at level 4
+  screen.move(64, 6)
+  screen.text_center(anims[show_idx].name)
+
+  -- right: beat pulse dot at x=124, y=4
+  local pulse_brightness = math.floor(note_pulse * 15)
+  if pulse_brightness > 0 then
+    screen.level(clamp(pulse_brightness, 1, 15))
+    screen.circle(124, 4, 1)
+    screen.fill()
+  end
+
+  -- audio-reactive indicator: tiny level meter at far left edge (3px wide)
+  if audio_reactive then
+    local meter_height = math.floor(amp_smooth * 50)
+    meter_height = clamp(meter_height, 1, 50)
+    screen.level(clamp(math.floor(amp_smooth * 12) + 3, 2, 15))
+    screen.rect(0, 59 - meter_height, 2, meter_height)
+    screen.fill()
+  end
+
+  -- MIDI note indicator: small dot at level 15, top of screen when burst active
+  if midi_burst_active and midi_burst_intensity > 0.1 then
+    screen.level(clamp(math.floor(midi_burst_intensity * 15), 2, 15))
+    screen.circle(127, 1, 1)
+    screen.fill()
+  end
+
   -- note pulse: brief screen-wide brightness flash
   if note_pulse > 0.3 then
     screen.level(clamp(math.floor(note_pulse * 3), 1, 4))
     screen.rect(0, 0, 128, 1)
     screen.fill()
+  end
+
+  -- =====================
+  -- TRANSIENT PARAMETER POPUP (bottom, 0.8s duration)
+  -- =====================
+  if enc_popup_active then
+    local popup_alpha = 1.0 - (enc_popup_time / enc_popup_duration)
+    local popup_y = 54
+    local popup_h = 8
+    local popup_x_start = 32
+    local popup_w = 64
+
+    screen.level(clamp(math.floor(popup_alpha * 12), 1, 12))
+    screen.rect(popup_x_start, popup_y, popup_w, popup_h)
+    screen.stroke()
+
+    screen.level(clamp(math.floor(popup_alpha * 15), 2, 15))
+    screen.move(popup_x_start + 3, popup_y + 6)
+    screen.text(enc_popup_param .. \": \" .. enc_popup_value)
   end
 
   -- MIDI burst effect: temporary size increase on elements
@@ -770,19 +854,10 @@ function redraw()
     end
   end
 
-  -- label + sound status
+  -- status bar bottom
   screen.level(6)
   screen.move(2, 62)
-  screen.text(anims[show_idx].name)
-  screen.move(92, 62)
-  screen.text(playing and "PLAY" or "STOP")
-
-  -- audio reactive indicator
-  if audio_reactive then
-    screen.level(clamp(math.floor(amp_smooth * 12) + 3, 2, 15))
-    screen.move(64, 62)
-    screen.text_center("AUDIO")
-  end
+  screen.text(playing and \"PLAY\" or \"STOP\")
 
   screen.update()
 end
