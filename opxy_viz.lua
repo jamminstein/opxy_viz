@@ -34,6 +34,15 @@ local step_i = 1
 local note_pulse = 0.0
 local note_pulse_decay = 0.88  -- per-frame multiplier
 
+-- audio-reactive state
+local audio_reactive = false
+local amp_level = 0.0
+local amp_smooth = 0.0
+
+-- MIDI burst state
+local midi_burst_active = false
+local midi_burst_intensity = 0.0
+
 -- ======================
 -- Utilities
 -- ======================
@@ -87,6 +96,15 @@ local function draw_grain(time, m)
 end
 
 -- ======================
+-- Audio reactive polling
+-- ======================
+local function poll_audio_level()
+  if audio_reactive then
+    poll.set("amp_in_l")
+  end
+end
+
+-- ======================
 -- Animations (1..11 contiguous)
 -- ======================
 
@@ -104,9 +122,11 @@ anims[1] = {
     local jy = (math.cos(time * 17.1) + math.cos(time * 6.1)) * 0.5 * j
     -- note pulse: expand rings on trigger
     local pulse_r = note_pulse * lerp(4, 12, m)
+    -- audio-reactive: boost maxr based on amplitude
+    local audio_boost = amp_level * lerp(6, 18, m)
     for k = 1, 5 do
       local u = (k - 1) / 4
-      local r = maxr * punch * (0.55 + 0.55 * u) + pulse_r
+      local r = (maxr + audio_boost) * punch * (0.55 + 0.55 * u) + pulse_r
       local lvl = math.floor(lerp(15, 2, u) + 0.5)
       screen.level(lvl)
       screen.circle(cx + jx, cy + jy, r)
@@ -141,7 +161,7 @@ anims[2] = {
     local rate = (0.35 + 1.9 * speed)
     local p = (time * rate) % 1.0
     local y = 2 + p * (h - 4)
-    local thickness = lerp(3, 16, m) + note_pulse * 6
+    local thickness = lerp(3, 16, m) + note_pulse * 6 + amp_level * 4
     local wobble = lerp(0.3, 3.2, m)
     local flutter = math.sin(time * 9.0) * wobble + math.sin(time * 21.0) * wobble * 0.35
     for k = 1, 5 do
@@ -194,7 +214,9 @@ anims[3] = {
       local r = lerp(6, 34, u)
       -- pulse brightens inner rings
       local pulse_boost = note_pulse * (1 - u) * 5
-      screen.level(clamp(math.floor(lerp(2, 10, 1 - u) + pulse_boost + 0.5), 1, 15))
+      -- audio-reactive brightness
+      local audio_brighten = amp_level * 3
+      screen.level(clamp(math.floor(lerp(2, 10, 1 - u) + pulse_boost + audio_brighten + 0.5), 1, 15))
       screen.circle(cx, cy, r)
       screen.stroke()
     end
@@ -222,7 +244,7 @@ anims[4] = {
     local turns = lerp(1.0, 4.5, m)
     local steps = math.floor(lerp(40, 120, m) + 0.5)
     local spin = time * (0.8 + 2.2 * speed)
-    local maxr = lerp(22, 40, m) + note_pulse * 6
+    local maxr = lerp(22, 40, m) + note_pulse * 6 + amp_level * 8
     for i = 1, steps do
       local u = i / steps
       local a = spin + u * turns * math.pi * 2
@@ -252,7 +274,7 @@ anims[5] = {
   draw = function(time, m)
     local cx, cy = 64, 32
     local n = math.floor(lerp(6, 18, m) + 0.5)
-    local spread = lerp(10, 30, m) + note_pulse * 8
+    local spread = lerp(10, 30, m) + note_pulse * 8 + amp_level * 12
     local wob = lerp(0.0, 0.8, m)
     local trail = math.floor(lerp(2, 6, m) + 0.5)
     for ti = trail, 0, -1 do
@@ -284,7 +306,7 @@ anims[6] = {
     local k = ease_punch(p)
     local bars = math.floor(lerp(4, 14, m) + 0.5)
     local gap = h / bars
-    local shake = lerp(0.0, 2.5, m) + note_pulse * 3
+    local shake = lerp(0.0, 2.5, m) + note_pulse * 3 + amp_level * 2
     local sx = math.sin(time * 23.1) * shake
     local sy = math.cos(time * 19.8) * shake * 0.6
     for i = 0, bars - 1 do
@@ -313,12 +335,14 @@ anims[7] = {
     local freq = (0.35 + 1.7 * speed)
     -- note pulse shifts the wave phase for a visual "kick"
     local pulse_offset = note_pulse * 2.0
+    -- audio-reactive frequency modulation
+    local audio_freq_mod = amp_level * 3.0
     for y = 0, h - 1, block do
       for x = 0, w - 1, block do
         local nx = (x - 64) / 64
         local ny = (y - 32) / 32
         local r = math.sqrt(nx * nx + ny * ny)
-        local v = math.sin((r * 7.0 * zoom) - time * freq * 6.0 + pulse_offset)
+        local v = math.sin((r * (7.0 + audio_freq_mod) * zoom) - time * freq * 6.0 + pulse_offset)
         local vv = (v * 0.5 + 0.5)
         local lvl = math.floor(lerp(2, 15, vv) + 0.5)
         screen.level(lvl)
@@ -339,7 +363,7 @@ anims[8] = {
   draw = function(time, m)
     local h = 64
     local bands = math.floor(lerp(6, 20, m) + 0.5)
-    local amp = lerp(1.0, 6.0, m) + note_pulse * 4
+    local amp = lerp(1.0, 6.0, m) + note_pulse * 4 + amp_level * 8
     local rate = (0.6 + 2.0 * speed)
     for i = 1, bands do
       local yy = (i / (bands + 1)) * h
@@ -378,7 +402,7 @@ anims[9] = {
     local thick = (m > 0.55) and 2 or 1
     local flip_rate = lerp(0.03, 0.25, m)
     -- note pulse widens the glow radius
-    local glow_boost = note_pulse * 2.0
+    local glow_boost = note_pulse * 2.0 + amp_level * 1.5
     for gy = 0, rows - 1 do
       for gx = 0, cols - 1 do
         local x0 = gx * cell
@@ -431,13 +455,14 @@ anims[10] = {
     end
     -- note pulse adds global brightness boost
     local pulse_boost = math.floor(note_pulse * 4 + 0.5)
+    local audio_boost = math.floor(amp_level * 3 + 0.5)
     for j = rows, 0, -1 do
       for i = 0, cols do
         local x, y = iso(i, j)
         local h0 = height(i, j)
-        local top = clamp(math.floor(lerp(4, 10, 1 - h0) + 0.5) + pulse_boost, 1, 15)
-        local edge1 = clamp(math.floor(lerp(2, 8, 1 - h0) + 0.5) + pulse_boost, 1, 15)
-        local edge2 = clamp(math.floor(lerp(1, 6, 1 - h0) + 0.5) + pulse_boost, 1, 15)
+        local top = clamp(math.floor(lerp(4, 10, 1 - h0) + pulse_boost + audio_boost + 0.5), 1, 15)
+        local edge1 = clamp(math.floor(lerp(2, 8, 1 - h0) + pulse_boost + audio_boost + 0.5), 1, 15)
+        local edge2 = clamp(math.floor(lerp(1, 6, 1 - h0) + pulse_boost + audio_boost + 0.5), 1, 15)
         local x1, y1 = x, y - cell * 0.55
         local x2, y2 = x + cell, y
         local x3, y3 = x, y + cell * 0.55
@@ -474,7 +499,7 @@ anims[11] = {
     local w, h = 128, 64
     local depth = math.floor(lerp(6, 14, m) + 0.5)
     local skew = lerp(0.0, 10.0, m)
-    local wob = lerp(0.0, 2.5, m) + note_pulse * 2
+    local wob = lerp(0.0, 2.5, m) + note_pulse * 2 + amp_level * 1.5
     local ox = math.sin(time * (0.6 + 1.5 * speed)) * wob
     local oy = math.cos(time * (0.5 + 1.2 * speed)) * wob
     local x0, y0 = 6 + ox, 6 + oy
@@ -588,6 +613,28 @@ local function sequencer()
 end
 
 -- ======================
+-- MIDI input
+-- ======================
+local midi_in = midi.connect(1)
+
+local function handle_midi_note_on(note, velocity)
+  midi_burst_active = true
+  midi_burst_intensity = velocity / 127.0
+  -- decay burst over 150ms
+  clock.run(function()
+    for _ = 1, 15 do
+      clock.sleep(0.01)
+      midi_burst_intensity = midi_burst_intensity * 0.92
+    end
+    midi_burst_active = false
+  end)
+end
+
+if midi_in then
+  midi_in.note_on = handle_midi_note_on
+end
+
+-- ======================
 -- Norns lifecycle
 -- ======================
 local metro_redraw = metro.init()
@@ -621,6 +668,10 @@ function init()
   params:add_control("rel", "RELEASE", controlspec.new(0.05, 3.0, "lin", 0.01, 0.6, "s"))
   params:add_control("cutoff", "CUTOFF", controlspec.new(80, 4000, "exp", 1, 700, "hz"))
 
+  params:add_separator("audio_reactive", "AUDIO REACTIVE")
+  params:add_option("audio_reactive", "AUDIO REACTIVE", { "off", "on" }, 1)
+  params:set_action("audio_reactive", function(v) audio_reactive = (v == 2) end)
+
   params:bang()
   ensure_seqs()
   set_current_anim(1)
@@ -639,9 +690,21 @@ function init()
     -- decay note pulse each frame
     note_pulse = note_pulse * note_pulse_decay
     if note_pulse < 0.01 then note_pulse = 0 end
+    -- smooth audio level (low-pass filter)
+    amp_smooth = amp_smooth * 0.85 + amp_level * 0.15
     redraw()
   end
   metro_redraw:start()
+
+  -- audio polling metro
+  local audio_metro = metro.init()
+  audio_metro.time = 0.1
+  audio_metro.event = function()
+    if audio_reactive then
+      poll_audio_level()
+    end
+  end
+  audio_metro:start()
 end
 
 function enc(n, d)
@@ -698,12 +761,28 @@ function redraw()
     screen.fill()
   end
 
+  -- MIDI burst effect: temporary size increase on elements
+  if midi_burst_active then
+    screen.level(clamp(math.floor(midi_burst_intensity * 8), 2, 12))
+    for _ = 1, 3 do
+      screen.circle(64, 32, 20 + midi_burst_intensity * 10)
+      screen.stroke()
+    end
+  end
+
   -- label + sound status
   screen.level(6)
   screen.move(2, 62)
   screen.text(anims[show_idx].name)
   screen.move(92, 62)
   screen.text(playing and "PLAY" or "STOP")
+
+  -- audio reactive indicator
+  if audio_reactive then
+    screen.level(clamp(math.floor(amp_smooth * 12) + 3, 2, 15))
+    screen.move(64, 62)
+    screen.text_center("AUDIO")
+  end
 
   screen.update()
 end
