@@ -1,32 +1,26 @@
 # opxy_viz
 
-A visual-first animation app with bass sequences. Browse and morph animations while playing along with generative bass patterns.
-
-## Install
-
-`;install https://github.com/jamminstein/opxy_viz`
+> Visual-first animation app with bass sequences
 
 ## Controls
 
-**Norns:**
-- E1: Browse animations
-- E2: Morph between animation parameters
-- E3: Speed control
-- K2: Generate new sequence
-- K3: Play / Stop
+- **E1** — browse animations (continuous selection)
+- **E2** — morph parameter
+- **E3** — animation speed
+- **K2** — generate new bass sequence
+- **K3** — play / stop
 
-## Features
+## Grid
 
-- Visual animation engine
-- Bass sequence generation
-- Real-time morphing and parameter control
-- Speed variation for dynamic playback
+None required.
 
 ## Requirements
 
 - norns
-- PolyPerc engine (built-in)
+- engine: PolyPerc
 
-## Author
+## Install
 
-@jamminstein
+```
+;install https://github.com/jamminstein/opxy_viz
+```
