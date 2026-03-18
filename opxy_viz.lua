@@ -34,6 +34,13 @@ local step_i = 1
 local note_pulse = 0.0
 local note_pulse_decay = 0.88  -- per-frame multiplier
 
+-- visual density (particles or complexity)
+local anim_density = 0.5  -- 0-1, affects note busyness
+
+-- animation mode
+local anim_mode = 1  -- 1=particle, 2=waveform, 3=lissajous, 4=cellular
+local anim_mode_names = {"particle", "waveform", "lissajous", "cellular"}
+
 -- audio-reactive state
 local audio_reactive = false
 local amp_level = 0.0
@@ -603,6 +610,15 @@ local function play_step()
   if not s or #s == 0 then return end
   local oct = s[step_i] or 0
   local note = base_note + 12 * oct
+
+  -- Animation-to-sound: density affects note probability
+  if math.random() > anim_density then
+    -- skip note based on density (lower density = fewer notes)
+    step_i = step_i + 1
+    if step_i > #s then step_i = 1 end
+    return
+  end
+
   engine.amp(params:get("amp"))
   engine.release(params:get("rel"))
   engine.cutoff(params:get("cutoff"))
@@ -630,6 +646,12 @@ local midi_in = midi.connect(1)
 local function handle_midi_note_on(note, velocity)
   midi_burst_active = true
   midi_burst_intensity = velocity / 127.0
+
+  -- MIDI input triggers animation: pitch -> color, velocity -> burst size
+  local color_shift = (note % 12) / 12.0  -- normalize 0-1 for color
+  anim_density = clamp(color_shift, 0.2, 1.0)  -- min density 0.2
+  note_pulse = 1.0  -- visual trigger
+
   -- decay burst over 150ms
   clock.run(function()
     for _ = 1, 15 do
@@ -681,6 +703,13 @@ function init()
   params:add_separator("audio_reactive", "AUDIO REACTIVE")
   params:add_option("audio_reactive", "AUDIO REACTIVE", { "off", "on" }, 1)
   params:set_action("audio_reactive", function(v) audio_reactive = (v == 2) end)
+
+  params:add_separator("anim_mode", "ANIMATION MODE")
+  params:add_option("anim_mode", "MODE", anim_mode_names, 1)
+  params:set_action("anim_mode", function(v) anim_mode = v end)
+
+  params:add_control("anim_density", "ANIMATION DENSITY", controlspec.new(0.0, 1.0, "lin", 0.01, 0.5))
+  params:set_action("anim_density", function(v) anim_density = v end)
 
   params:bang()
   ensure_seqs()
@@ -791,9 +820,9 @@ function redraw()
   screen.move(2, 6)
   screen.text("VIZ")
 
-  -- center: animation name at level 4
+  -- center: animation name + mode at level 4
   screen.move(64, 6)
-  screen.text_center(anims[show_idx].name)
+  screen.text_center(anims[show_idx].name .. " (" .. anim_mode_names[anim_mode] .. ")")
 
   -- right: beat pulse dot at x=124, y=4
   local pulse_brightness = math.floor(note_pulse * 15)
@@ -851,6 +880,19 @@ function redraw()
     for _ = 1, 3 do
       screen.circle(64, 32, 20 + midi_burst_intensity * 10)
       screen.stroke()
+    end
+  end
+
+  -- bass sequence display: step indicator at bottom
+  if seqs[current_anim] and #seqs[current_anim] > 0 then
+    screen.level(3)
+    local seq_len = math.min(#seqs[current_anim], 16)
+    local seq_w = 8
+    for i = 1, seq_len do
+      local brightness = (i == step_i) and 12 or 4
+      screen.level(brightness)
+      screen.rect(2 + (i-1)*(seq_w+1), 54, seq_w, 3)
+      screen.fill()
     end
   end
 
