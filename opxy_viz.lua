@@ -700,11 +700,11 @@ function init()
   params:add_control("rel", "RELEASE", controlspec.new(0.05, 3.0, "lin", 0.01, 0.6, "s"))
   params:add_control("cutoff", "CUTOFF", controlspec.new(80, 4000, "exp", 1, 700, "hz"))
 
-  params:add_separator("audio_reactive", "AUDIO REACTIVE")
+  params:add_separator("audio_reactive_sep", "AUDIO REACTIVE")
   params:add_option("audio_reactive", "AUDIO REACTIVE", { "off", "on" }, 1)
   params:set_action("audio_reactive", function(v) audio_reactive = (v == 2) end)
 
-  params:add_separator("anim_mode", "ANIMATION MODE")
+  params:add_separator("anim_mode_sep", "ANIMATION MODE")
   params:add_option("anim_mode", "MODE", anim_mode_names, 1)
   params:set_action("anim_mode", function(v) anim_mode = v end)
 
