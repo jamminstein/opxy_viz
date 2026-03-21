@@ -670,6 +670,8 @@ end
 -- Norns lifecycle
 -- ======================
 local metro_redraw = metro.init()
+local audio_metro = nil
+local seq_clock_id = nil
 
 function init()
   math.randomseed(os.time())
@@ -716,7 +718,7 @@ function init()
   set_current_anim(1)
 
   -- start sequencer (uses clock.sync for external sync support)
-  clock.run(sequencer)
+  seq_clock_id = clock.run(sequencer)
 
   -- redraw metro
   last_time = util.time()
@@ -745,7 +747,7 @@ function init()
   metro_redraw:start()
 
   -- audio polling metro
-  local audio_metro = metro.init()
+  audio_metro = metro.init()
   audio_metro.time = 0.1
   audio_metro.event = function()
     if audio_reactive then
@@ -905,6 +907,7 @@ function redraw()
 end
 
 function cleanup()
-  clock.cancel_all()
+  if seq_clock_id then clock.cancel(seq_clock_id) end
   if metro_redraw then metro_redraw:stop() end
+  if audio_metro then audio_metro:stop() end
 end
